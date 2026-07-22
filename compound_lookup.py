@@ -28,6 +28,15 @@ import pandas as pd
 FUZZY_MATCH_THRESHOLD = 95.0  # percent
 NO_DATA_FLAG = "NO DATA: property is blank for this compound"
 
+# Column-name substrings (case-insensitive) treated as financial/commercial
+# data and excluded from lookups by default, per data-handling policy.
+FINANCIAL_COLUMN_PATTERNS = ("cost", "price", "£", "$", "€")
+
+
+def _is_financial_column(column_name: str) -> bool:
+    name = str(column_name).casefold()
+    return any(pattern in name for pattern in FINANCIAL_COLUMN_PATTERNS)
+
 
 @dataclass
 class LookupResult:
@@ -79,6 +88,7 @@ def get_compound_properties(
     compound_name: str,
     properties: list[str] | None = None,
     compound_column_index: int = 1,
+    exclude_financial_columns: bool = True,
 ) -> LookupResult:
     """Return properties for `compound_name` from the table at `file_path`.
 
@@ -87,9 +97,14 @@ def get_compound_properties(
     `properties`, if given, restricts the result to those property/column
     names; otherwise every column except the compound-name column is
     returned.
+    `exclude_financial_columns` (default True) drops any column whose name
+    looks like cost/price/financial data (see FINANCIAL_COLUMN_PATTERNS)
+    before matching against `properties` or returning results.
     """
     df = load_compound_table(file_path)
     compound_col = df.columns[compound_column_index]
+    if exclude_financial_columns:
+        df = df[[c for c in df.columns if c == compound_col or not _is_financial_column(c)]]
 
     best_name, score, is_exact = _find_best_match(df[compound_col], compound_name)
 
